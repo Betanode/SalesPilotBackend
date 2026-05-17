@@ -9,7 +9,7 @@ import os
 import pickle
 import shutil
 
-from extractor import extract_text
+from rag.extractor import extract_text
 
 
 PERSIST_DIR = "./chroma_db"

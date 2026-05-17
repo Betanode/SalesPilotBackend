@@ -1,10 +1,10 @@
 from fastapi import APIRouter
-from pydantic import BaseModel # what is this for?
+from pydantic import BaseModel
 from services.llm import call_llm
 
 router = APIRouter()
 
-class PromptRequest(BaseModel):  # what is this
+class PromptRequest(BaseModel):
     prompt: str
 
 @router.post("/ask")

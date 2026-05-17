@@ -12,8 +12,8 @@ def call_llm(
     prompt: str,
     system_prompt: Optional[str] = None,
     temperature: float = 0.5,
-    max_tokens: int = 500,
-    model: str = "claude-sonnet-4-0"
+    max_tokens: int = 1000,
+    model: str = "claude-sonnet-4-5"
 ) -> str:
     try:
         response = client.messages.create(
