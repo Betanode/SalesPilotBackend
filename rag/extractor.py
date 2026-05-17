@@ -56,10 +56,3 @@ def extract_text(file_path: str) -> str:
     doc.close()
 
     return clean_text("\n".join(final_text))
-
-
-if __name__ == "__main__":
-    file_path = "/Users/abhinavdwivedi/Desktop/SalesCoachFrontend/backend/the-verdict.txt"
-    text = extract_text(file_path)
-
-    print(len(text))

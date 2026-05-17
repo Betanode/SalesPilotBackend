@@ -1,6 +1,6 @@
 from typing import List, Dict
 
-class CoversationMemory:
+class ConversationMemory:
     def __init__(self, max_messages: int = 25):
         self.history : List[Dict] = []
         self.max_messages = max_messages
@@ -23,6 +23,5 @@ class CoversationMemory:
     def format_for_prompt(self)->str:
         formatted = ""
         for msg in self.history:
-            formatted += f"{msg['role'].upper()}:{meg['content']}\n"
+            formatted += f"{msg['role'].upper()}:{msg['content']}\n"
         return formatted
-    

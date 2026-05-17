@@ -1,9 +1,6 @@
 from typing import TypedDict, List, Dict
-from langgraph.graph import StateGraph, END
-
 from services.llm import call_llm
 from rag.chunking import hybrid_retrieve
-
 
 
 class AgentState(TypedDict):
@@ -13,60 +10,49 @@ class AgentState(TypedDict):
     done: bool
 
 
-
 def format_messages(messages: List[Dict]) -> str:
     return "\n".join([f"{m['role']}: {m['content']}" for m in messages])
 
 
-
-def ask_question(state: AgentState):
-    """
-    Only ask first question
-    """
-    if state["turn"] == 0:
-        state["messages"].append({
-            "role": "assistant",
-            "content": "Hello! What would you like to discuss today?"
-        })
+def ask_question(state: AgentState) -> AgentState:
+    state["messages"].append({
+        "role": "assistant",
+        "content": "Hello! I am your sales coach. Please tell me about the product you want to sell and what aspect of the sales conversation you'd like to practice today."
+    })
     return state
 
 
-
-def generate_response(state: AgentState):
-
+def generate_response(state: AgentState) -> AgentState:
     last_user_message = state["messages"][-1]["content"]
 
     chunks = hybrid_retrieve(last_user_message, k=5)
-    context = "\n".join([c["content"] for c in chunks])
+    context = "\n".join([c["content"] for c in chunks]) if chunks else "No product context available."
 
-    prompt = f"""
-You are an expert sales coach.
+    prompt = f"""You are an expert sales coach conducting a practice interview with a sales representative.
 
 Conversation so far:
 {format_messages(state["messages"])}
 
-Relevant knowledge:
+Relevant product knowledge from the uploaded document:
 {context}
 
-Task:
-1. Give short, actionable feedback on user's last answer
-2. Ask next better question to improve skill
+Your task:
+1. Give short, specific, actionable feedback on the sales rep's last answer (2-3 sentences max).
+2. Ask one focused follow-up question to probe their sales skills deeper.
 
-STRICT FORMAT:
+Use EXACTLY this format and nothing else:
+
 FEEDBACK:
-<feedback>
+<your feedback here>
 
 QUESTION:
-<next question>
+<your next question here>
 """
 
     response = call_llm(prompt)
     feedback, question = parse_llm_response(response)
 
-    # store feedback separately
     state["feedbacks"].append(feedback)
-
-    # ONLY question goes to chat
     state["messages"].append({
         "role": "assistant",
         "content": question
@@ -76,91 +62,45 @@ QUESTION:
     return state
 
 
+def final_feedback(state: AgentState) -> AgentState:
+    all_feedbacks = "\n".join(
+        [f"Turn {i+1}: {fb}" for i, fb in enumerate(state["feedbacks"])]
+    )
 
-def check_end(state: AgentState):
-    if state["turn"] >= 10:
-        state["done"] = True
-    return state
+    prompt = f"""You are a professional sales coach. A sales rep just completed a practice session.
 
-
-
-def final_feedback(state: AgentState):
-
-    all_feedbacks = "\n".join(state["feedbacks"])
-
-    prompt = f"""
-You are a professional sales coach.
-
-Based on the feedback below, generate a structured report.
-
+Here is the turn-by-turn feedback from the session:
 {all_feedbacks}
 
-Include:
-- Strengths
-- Weaknesses
-- Improvements
-- Final Score out of 10
+Generate a structured final performance report with these exact sections:
+
+STRENGTHS:
+- List what the rep did well
+
+WEAKNESSES:
+- List areas that need improvement
+
+KEY IMPROVEMENTS:
+- List 2-3 specific, actionable things to work on
+
+FINAL SCORE: X/10
+(with one sentence justifying the score)
 """
 
     summary = call_llm(prompt)
-
     state["messages"].append({
         "role": "assistant",
         "content": summary
     })
-
+    state["done"] = True
     return state
 
 
-
 def parse_llm_response(text: str):
-
     try:
         parts = text.split("QUESTION:")
         feedback = parts[0].replace("FEEDBACK:", "").strip()
         question = parts[1].strip()
+        return feedback, question
     except Exception:
-        feedback = text.strip()
-        question = "Can you explain more?"
-
-    return feedback, question
-
-
-
-def build_graph():
-
-    builder = StateGraph(AgentState)
-
-    builder.add_node("ask", ask_question)
-    builder.add_node("generate", generate_response)
-    builder.add_node("check", check_end)
-    builder.add_node("summary", final_feedback)
-
-    builder.set_entry_point("ask")
-
-    builder.add_edge("ask", "generate")
-    builder.add_edge("generate", "check")
-
-    def should_end(state: AgentState):
-        return "end" if state["done"] else "continue"
-
-    builder.add_conditional_edges(
-        "check",
-        should_end,
-        {
-            "continue": "generate",
-            "end": "summary"
-        }
-    )
-
-    builder.add_edge("summary", END)
-
-    return builder.compile()
-
-
-
-graph = build_graph()
-
-
-def run_agent(state: AgentState):
-    return graph.invoke(state)
+        return text.strip(), "Can you elaborate on that point a bit more?"
